@@ -629,22 +629,19 @@
         align-items: stretch;
       }
 
-      /* Slots: horizontal scroll row */
+      /* Slots: stack vertically on mobile (overflow-x: auto clips dropdowns) */
       #slots-container {
         display: flex !important;
-        overflow-x: auto;
+        flex-direction: column;
         gap: 8px;
         width: 100%;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
-        padding-bottom: 2px;
+        overflow: visible;
       }
-      #slots-container::-webkit-scrollbar { display: none; }
 
       .loc-slot {
-        min-width: 160px;
-        max-width: 190px;
-        flex-shrink: 0;
+        min-width: unset;
+        max-width: 100%;
+        width: 100%;
       }
 
       /* Action bar: full width, wrap if needed */
