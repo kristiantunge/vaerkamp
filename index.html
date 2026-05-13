@@ -999,9 +999,7 @@ async function fetchWeather(idx) {
   const loc = state.locations[idx];
   if (!loc) return null;
   const url = `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${loc.lat.toFixed(4)}&lon=${loc.lon.toFixed(4)}`;
-  const res = await fetch(url, {
-    headers: { 'User-Agent': 'vaerkamp.no contact@vaerkamp.no' }
-  });
+  const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${loc.name}`);
   return res.json();
 }
