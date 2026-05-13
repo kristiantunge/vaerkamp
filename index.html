@@ -765,8 +765,8 @@ const LANG = {
     statusLoading: 'Henter værdata…',
     statusLoadingBtn: '⏳ Laster…',
     noData: 'Ingen data tilgjengelig.',
-    colTime: 'Tid', colSky: '🌤 Vær', colTemp: '🌡 Temp',
-    colPrecip: '💧 Nedbør', colWind: '💨 Vind',
+    colDate: 'Dato', colTime: 'Tid', colSky: '🌤 Vær', colTemp: '🌡 Temp',
+    colTempRange: '🌡 Min/Maks', colPrecip: '💧 Nedbør', colWind: '💨 Vind',
     chartTemp: 'Temperatur (°C)', chartPrecip: 'Nedbør (mm/t)',
     rowTemp: '🌡 Snitttemp', rowRain: '💧 Total nedbør',
     rowWind: '💨 Snittvind', rowForecast: '🌤 Vær', rowScore: '⭐ Poeng',
@@ -803,8 +803,8 @@ const LANG = {
     statusLoading: 'Fetching weather data…',
     statusLoadingBtn: '⏳ Loading…',
     noData: 'No data available.',
-    colTime: 'Time', colSky: '🌤 Sky', colTemp: '🌡 Temp',
-    colPrecip: '💧 Precip', colWind: '💨 Wind',
+    colDate: 'Date', colTime: 'Time', colSky: '🌤 Sky', colTemp: '🌡 Temp',
+    colTempRange: '🌡 Min/Max', colPrecip: '💧 Precip', colWind: '💨 Wind',
     chartTemp: 'Temperature (°C)', chartPrecip: 'Precipitation (mm/h)',
     rowTemp: '🌡 Avg temp', rowRain: '💧 Total rain',
     rowWind: '💨 Avg wind', rowForecast: '🌤 Forecast', rowScore: '⭐ Score',
@@ -855,7 +855,7 @@ function applyLang() {
 // ── State ──────────────────────────────────────────────────────────────────
 const state = {
   locations: [null],   // grows dynamically, one trailing null = "add next" slot
-  weatherData: [], // test
+  weatherData: [],
   view: 'table',
   range: '2d',
   hours: 48,
@@ -1067,6 +1067,56 @@ function buildTimeline() {
     .map(t => t.time);
 }
 
+// ── Daily summary (for 7-day view) ───────────────────────────────────────
+function buildDailySummary(weatherData) {
+  if (!weatherData) return null;
+  const series = weatherData.properties.timeseries;
+  const now = new Date();
+  const cutoff = new Date(now.getTime() + 7 * 24 * 3600 * 1000);
+
+  // Group entries by local date string
+  const days = {};
+  series.forEach(entry => {
+    const d = new Date(entry.time);
+    if (d < now || d > cutoff) return;
+    const key = d.toLocaleDateString('no-NO', { year: 'numeric', month: '2-digit', day: '2-digit' });
+    if (!days[key]) days[key] = { isoDate: entry.time, entries: [] };
+    days[key].entries.push(entry);
+  });
+
+  return Object.values(days).map(({ isoDate, entries }) => {
+    const temps = entries.map(e => e.data.instant.details.air_temperature);
+    const winds = entries.map(e => e.data.instant.details.wind_speed);
+
+    // Sum precipitation: prefer next_1_hours, fall back to next_6_hours per entry
+    let totalPrecip = 0;
+    entries.forEach(e => {
+      const p1 = e.data.next_1_hours?.details?.precipitation_amount;
+      const p6 = e.data.next_6_hours?.details?.precipitation_amount;
+      if (p1 != null) totalPrecip += p1;
+      else if (p6 != null) totalPrecip += p6;
+    });
+
+    // Most common daytime symbol (06–20 local)
+    const symbols = entries
+      .filter(e => { const h = new Date(e.time).getHours(); return h >= 6 && h < 20; })
+      .map(e => (e.data.next_1_hours || e.data.next_6_hours)?.summary?.symbol_code || '')
+      .filter(Boolean);
+    const freq = {};
+    symbols.forEach(s => { freq[s] = (freq[s] || 0) + 1; });
+    const topSymbol = Object.entries(freq).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+
+    return {
+      isoDate,
+      minTemp: Math.min(...temps),
+      maxTemp: Math.max(...temps),
+      avgWind: winds.reduce((a, b) => a + b, 0) / winds.length,
+      totalPrecip,
+      symbol: topSymbol,
+    };
+  });
+}
+
 function getEntry(weatherData, isoTime) {
   if (!weatherData) return null;
   return weatherData.properties.timeseries.find(t => t.time === isoTime) || null;
@@ -1129,6 +1179,7 @@ function isNightHour(isoTime) {
 }
 
 function renderTable() {
+  if (state.range === '7d') { renderTable7d(); return; }
   const idxs = activeIdxs();
   const timeline = buildTimeline();
   if (!timeline.length) { setStatus(t().noData); return; }
@@ -1209,6 +1260,73 @@ function renderTable() {
 
   html += `</tbody></table></div>`;
 
+  document.getElementById('main-content').innerHTML = html;
+}
+
+// ── 7-day table view ─────────────────────────────────────────────────────
+function renderTable7d() {
+  const idxs = activeIdxs();
+  const summaries = {};
+  idxs.forEach(i => { summaries[i] = buildDailySummary(state.weatherData[i]) || []; });
+
+  const refDays = summaries[idxs[0]];
+  if (!refDays?.length) { setStatus(t().noData); return; }
+
+  let html = `<div class="table-wrap"><table>
+    <thead>
+      <tr class="header-row-1">
+        <th style="text-align:left; padding-left:16px; min-width:100px; background:white;">${t().colDate}</th>`;
+
+  idxs.forEach((i, pos) => {
+    html += `<th colspan="4" class="loc-${i}-head ${pos > 0 ? 'loc-divider' : ''}"
+      style="${pos > 0 ? 'border-left:2px solid rgba(255,255,255,0.3);' : ''}">
+      ${state.locations[i].name}
+    </th>`;
+  });
+
+  html += `</tr><tr class="header-row-2"><th></th>`;
+
+  idxs.forEach((i, pos) => {
+    const b = pos > 0 ? 'border-left:2px solid rgba(255,255,255,0.4);' : '';
+    html += `
+      <th class="loc-${i}-head" style="${b}">${t().colSky}</th>
+      <th class="loc-${i}-head">${t().colTempRange}</th>
+      <th class="loc-${i}-head">${t().colPrecip}</th>
+      <th class="loc-${i}-head">${t().colWind}</th>`;
+  });
+
+  html += `</tr></thead><tbody>`;
+
+  refDays.forEach(day => {
+    const dayStr = new Date(day.isoDate).toDateString();
+    html += `<tr><td class="col-time" style="padding-left:18px; font-size:0.82rem; white-space:nowrap; text-align:left;">
+      ${formatDay(day.isoDate)}</td>`;
+
+    idxs.forEach((i, pos) => {
+      const s = summaries[i].find(d => new Date(d.isoDate).toDateString() === dayStr);
+      const b = pos > 0 ? 'border-left:2px solid var(--border);' : '';
+      if (!s) { html += `<td colspan="4" class="no-data" style="${b}">—</td>`; return; }
+
+      const minC = tempClass(s.minTemp);
+      const maxC = tempClass(s.maxTemp);
+      const fmt = v => `${v > 0 ? '+' : ''}${v.toFixed(0)}°`;
+      const precipStr = s.totalPrecip > 0 ? `${s.totalPrecip.toFixed(1)} mm` : '0';
+
+      html += `
+        <td class="col-symbol" style="${b}">${symbolEmoji(s.symbol)}</td>
+        <td class="col-temp" style="font-size:0.82rem; min-width:70px;">
+          <span class="${minC}">${fmt(s.minTemp)}</span>
+          <span style="color:#c7c7cc;"> / </span>
+          <span class="${maxC}">${fmt(s.maxTemp)}</span>
+        </td>
+        <td class="col-precip">${precipStr}</td>
+        <td class="col-wind" style="font-size:0.82rem;">${s.avgWind.toFixed(1)} m/s</td>`;
+    });
+
+    html += `</tr>`;
+  });
+
+  html += `</tbody></table></div>`;
   document.getElementById('main-content').innerHTML = html;
 }
 
@@ -1354,39 +1472,70 @@ function getWeekendStats(weatherData, fri, sat, sun) {
   const friStr = fri.toDateString();
   const satStr = sat.toDateString();
   const sunStr = sun.toDateString();
+  const RAIN_THRESHOLD = 0.3;
+  const DAY_START = 7, DAY_END = 21;
 
+  // Include h >= 6 to capture 6-hour blocks starting at 06:00 that cover daytime
   const entries = timeseries.filter(t => {
     const d = new Date(t.time);
     const ds = d.toDateString();
     const h  = d.getHours();
-    return (ds === friStr || ds === satStr || ds === sunStr) && h >= 7 && h < 21;
+    return (ds === friStr || ds === satStr || ds === sunStr) && h >= 6 && h < DAY_END;
   });
   if (!entries.length) return null;
 
-  const temps   = entries.map(e => e.data.instant.details.air_temperature);
-  const winds   = entries.map(e => e.data.instant.details.wind_speed);
-  const precips = entries.map(e => {
-    const fc = e.data.next_1_hours || e.data.next_6_hours;
-    return fc?.details?.precipitation_amount ?? 0;
+  const temps = entries.map(e => e.data.instant.details.air_temperature);
+  const winds = entries.map(e => e.data.instant.details.wind_speed);
+
+  let totalPrecip = 0;
+  let rainyHours  = 0;
+  let totalHours  = 0;
+
+  entries.forEach(e => {
+    const p1 = e.data.next_1_hours?.details?.precipitation_amount;
+    const p6 = e.data.next_6_hours?.details?.precipitation_amount;
+
+    if (p1 != null) {
+      // 1-hour slot — straightforward
+      totalPrecip += p1;
+      totalHours  += 1;
+      if (p1 >= RAIN_THRESHOLD) rainyHours += 1;
+
+    } else if (p6 != null) {
+      // 6-hour slot — prorate to daytime overlap only
+      const h = new Date(e.time).getHours();
+      const overlap = Math.max(0, Math.min(h + 6, DAY_END) - Math.max(h, DAY_START));
+      if (overlap <= 0) return;
+
+      const daytimePrecip = p6 * (overlap / 6);
+      totalPrecip += daytimePrecip;
+      totalHours  += overlap;
+
+      // Estimate rainy hours: if average rate >= threshold → all overlap hours rainy
+      const avgHourlyRate = p6 / 6;
+      if (avgHourlyRate >= RAIN_THRESHOLD) {
+        rainyHours += overlap;
+      } else if (daytimePrecip >= RAIN_THRESHOLD) {
+        rainyHours += Math.min(overlap, Math.ceil(daytimePrecip / RAIN_THRESHOLD));
+      }
+    }
   });
 
-  const avgTemp     = temps.reduce((a,b) => a+b, 0) / temps.length;
-  const avgWind     = winds.reduce((a,b) => a+b, 0) / winds.length;
-  const totalPrecip = precips.reduce((a,b) => a+b, 0);
-  // Rainy hours: slots where measurable precipitation is expected (≥ 0.3 mm/h)
-  const RAIN_THRESHOLD = 0.3;
-  const rainyHours  = precips.filter(p => p >= RAIN_THRESHOLD).length;
+  if (totalHours === 0) return null;
 
-  // Pick a representative symbol (most common during daytime)
-  const symbols = entries.map(e => {
-    const fc = e.data.next_1_hours || e.data.next_6_hours;
-    return fc?.summary?.symbol_code || '';
-  }).filter(Boolean);
+  const avgTemp = temps.reduce((a, b) => a + b, 0) / temps.length;
+  const avgWind = winds.reduce((a, b) => a + b, 0) / winds.length;
+
+  // Most common daytime symbol
+  const symbols = entries
+    .filter(e => { const h = new Date(e.time).getHours(); return h >= DAY_START && h < 20; })
+    .map(e => (e.data.next_1_hours || e.data.next_6_hours)?.summary?.symbol_code || '')
+    .filter(Boolean);
   const symbolFreq = {};
-  symbols.forEach(s => { symbolFreq[s] = (symbolFreq[s]||0) + 1; });
-  const topSymbol = Object.entries(symbolFreq).sort((a,b) => b[1]-a[1])[0]?.[0] || '';
+  symbols.forEach(s => { symbolFreq[s] = (symbolFreq[s] || 0) + 1; });
+  const topSymbol = Object.entries(symbolFreq).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
 
-  return { avgTemp, avgWind, totalPrecip, rainyHours, totalHours: precips.length, topSymbol };
+  return { avgTemp, avgWind, totalPrecip, rainyHours, totalHours, topSymbol };
 }
 
 function scoreCity(stats) {
