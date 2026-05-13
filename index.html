@@ -1,0 +1,1570 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>yr.no Weather Comparison</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif;
+      background: #f2f2f7;
+      color: #1c1c1e;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* ── Header ── */
+    header {
+      background: rgba(28,28,30,0.95);
+      backdrop-filter: saturate(180%) blur(20px);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
+      border-bottom: 0.5px solid rgba(255,255,255,0.08);
+      color: #fff;
+      padding: 0 28px;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 200;
+    }
+    header .logo {
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+    }
+    header .logo span { color: #0a84ff; }
+
+    .lang-toggle {
+      display: flex;
+      background: rgba(255,255,255,0.1);
+      border-radius: 8px;
+      padding: 2px;
+      gap: 1px;
+    }
+    .lang-btn {
+      background: transparent;
+      border: none;
+      padding: 4px 11px;
+      font-size: 0.76rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: rgba(255,255,255,0.45);
+      border-radius: 6px;
+      font-family: inherit;
+      letter-spacing: 0.2px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .lang-btn.active  { background: rgba(255,255,255,0.18); color: #fff; }
+    .lang-btn:hover:not(.active) { color: rgba(255,255,255,0.75); }
+
+    /* ── Toolbar ── */
+    .location-bar {
+      background: rgba(255,255,255,0.9);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 0.5px solid #d1d1d6;
+      padding: 12px 24px;
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+
+    /* ── Location slots ── */
+    .loc-slot {
+      flex: 1;
+      min-width: 148px;
+      max-width: 210px;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .loc-slot label {
+      font-size: 0.66rem;
+      font-weight: 600;
+      color: #8e8e93;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding-left: 1px;
+    }
+    .color-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .loc-input-wrap {
+      display: flex;
+      align-items: center;
+      background: #f2f2f7;
+      border: 1.5px solid transparent;
+      border-radius: 10px;
+      transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+    }
+    .loc-input-wrap:focus-within {
+      background: #fff;
+      border-color: #0071e3;
+      box-shadow: 0 0 0 3px rgba(0,113,227,0.16);
+    }
+    .loc-input-wrap input {
+      background: transparent;
+      border: none;
+      outline: none;
+      padding: 8px 10px;
+      font-size: 0.875rem;
+      font-family: inherit;
+      width: 100%;
+      color: #1c1c1e;
+    }
+    .loc-input-wrap input::placeholder { color: #c7c7cc; }
+    .clear-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0 9px;
+      color: #c7c7cc;
+      font-size: 0.78rem;
+      display: none;
+      font-family: inherit;
+      transition: color 0.12s;
+    }
+    .clear-btn.visible { display: block; }
+    .clear-btn:hover { color: #636366; }
+
+    /* ── Search dropdown ── */
+    .dropdown {
+      position: absolute;
+      top: calc(100% + 5px);
+      left: 0; right: 0;
+      background: rgba(255,255,255,0.98);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      border: 0.5px solid rgba(0,0,0,0.1);
+      border-radius: 13px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.04), 0 12px 32px rgba(0,0,0,0.1);
+      z-index: 100;
+      max-height: 240px;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+    .dropdown-item {
+      padding: 10px 14px;
+      cursor: default;
+      border-bottom: 0.5px solid #f2f2f7;
+      transition: background 0.1s;
+      cursor: pointer;
+    }
+    .dropdown-item:last-child { border-bottom: none; }
+    .dropdown-item:hover { background: #f2f2f7; }
+    .dropdown-item .place-name { font-size: 0.875rem; font-weight: 500; color: #1c1c1e; }
+    .dropdown-item .place-detail { font-size: 0.74rem; color: #8e8e93; margin-top: 1px; }
+    .dropdown-loading, .dropdown-empty {
+      padding: 14px;
+      color: #aeaeb2;
+      font-size: 0.82rem;
+      text-align: center;
+    }
+
+    /* ── Buttons ── */
+    .compare-btn {
+      background: #0071e3;
+      color: #fff;
+      border: none;
+      border-radius: 100px;
+      padding: 0 20px;
+      height: 34px;
+      font-size: 0.855rem;
+      font-weight: 600;
+      letter-spacing: -0.1px;
+      cursor: pointer;
+      font-family: inherit;
+      white-space: nowrap;
+      align-self: flex-end;
+      transition: background 0.15s, opacity 0.15s, transform 0.1s;
+    }
+    .compare-btn:hover:not(:disabled) { background: #0077ed; }
+    .compare-btn:active { transform: scale(0.97); }
+    .compare-btn:disabled { opacity: 0.38; cursor: default; }
+
+    .weekend-btn {
+      background: #ff9f0a;
+      color: #fff;
+      border: none;
+      border-radius: 100px;
+      padding: 0 16px;
+      height: 34px;
+      font-size: 0.855rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      white-space: nowrap;
+      align-self: flex-end;
+      transition: background 0.15s, opacity 0.15s, transform 0.1s;
+    }
+    .weekend-btn:hover:not(:disabled) { background: #f0930a; }
+    .weekend-btn:active { transform: scale(0.97); }
+    .weekend-btn:disabled { opacity: 0.38; cursor: default; }
+
+    /* ── Segmented controls ── */
+    /* ── Action bar (wraps buttons + toggles) ── */
+    .action-bar {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      align-self: flex-end;
+    }
+
+    .view-toggle {
+      display: flex;
+      background: rgba(118,118,128,0.12);
+      border-radius: 9px;
+      padding: 2px;
+      gap: 1px;
+      align-self: flex-end;
+    }
+    .view-btn {
+      background: transparent;
+      border: none;
+      padding: 5px 11px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: #8e8e93;
+      border-radius: 7px;
+      font-family: inherit;
+      white-space: nowrap;
+      transition: background 0.12s, color 0.12s, box-shadow 0.12s;
+    }
+    .view-btn.active {
+      background: #fff;
+      color: #1c1c1e;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 0.5px 1px rgba(0,0,0,0.06);
+    }
+    .view-btn:hover:not(.active) { color: #3a3a3c; }
+
+    /* ── Main area ── */
+    .main {
+      padding: 20px 24px;
+      max-width: 1440px;
+      margin: 0 auto;
+    }
+
+    /* ── Status placeholder ── */
+    .status-bar {
+      text-align: center;
+      padding: 72px 24px;
+      color: #aeaeb2;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+    .status-bar .big-icon { font-size: 2.8rem; margin-bottom: 12px; opacity: 0.6; display: block; }
+
+    /* ── Loading spinner ── */
+    .loading-spinner {
+      display: inline-block;
+      width: 15px; height: 15px;
+      border: 2px solid #d1d1d6;
+      border-top-color: #0071e3;
+      border-radius: 50%;
+      animation: spin 0.65s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Table card ── */
+    .table-wrap {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 1px 1px rgba(0,0,0,0.03), 0 4px 20px rgba(0,0,0,0.06);
+      overflow: hidden;
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+    thead tr.header-row-1 th {
+      padding: 13px 12px 7px;
+      font-size: 0.875rem;
+      font-weight: 700;
+      text-align: center;
+      white-space: nowrap;
+      color: #fff;
+      letter-spacing: -0.2px;
+    }
+    thead tr.header-row-1 th:first-child {
+      color: #aeaeb2;
+      background: #fff;
+      font-size: 0.66rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    thead tr.header-row-2 th {
+      padding: 3px 12px 11px;
+      font-size: 0.66rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: rgba(255,255,255,0.7);
+      border-bottom: 0.5px solid #f2f2f7;
+    }
+    thead tr.header-row-2 th:first-child {
+      color: #c7c7cc;
+      background: #fff;
+    }
+    tbody tr { border-bottom: 0.5px solid #f2f2f7; transition: background 0.08s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #fafafa; }
+    tbody tr.day-separator td {
+      background: #f2f2f7;
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: #8e8e93;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      padding: 5px 18px;
+    }
+    tbody tr.night-row { background: #fafafa; }
+    tbody tr.night-row:hover { background: #f5f5f5; }
+    td {
+      padding: 9px 12px;
+      vertical-align: middle;
+      text-align: center;
+    }
+    td.col-time {
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.83rem;
+      white-space: nowrap;
+      color: #1c1c1e;
+      padding-left: 18px;
+      min-width: 56px;
+      font-variant-numeric: tabular-nums;
+    }
+    td.col-symbol { font-size: 1.2rem; min-width: 36px; }
+    td.col-temp {
+      font-weight: 700;
+      font-size: 0.875rem;
+      min-width: 50px;
+      font-variant-numeric: tabular-nums;
+    }
+    td.col-precip {
+      font-size: 0.82rem;
+      color: #2e9edd;
+      min-width: 50px;
+      font-variant-numeric: tabular-nums;
+    }
+    td.col-wind {
+      font-size: 0.82rem;
+      color: #636366;
+      min-width: 64px;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    td.no-data { color: #c7c7cc; font-size: 0.78rem; }
+
+    .temp-hot    { color: #ff3b30; }
+    .temp-warm   { color: #ff9500; }
+    .temp-mild   { color: #34c759; }
+    .temp-cool   { color: #007aff; }
+    .temp-cold   { color: #5856d6; }
+    .temp-freeze { color: #af52de; }
+
+    .loc-divider { border-left: 0.5px solid #e5e5ea !important; }
+
+    .loc-0-head { background: #1a6e9e; }
+    .loc-1-head { background: #2a7a4b; }
+    .loc-2-head { background: #7b4aa0; }
+    .loc-3-head { background: #b5372b; }
+    .loc-4-head { background: #c4500a; }
+    .loc-5-head { background: #0d7a6a; }
+    .loc-6-head { background: #7c3aab; }
+    .loc-7-head { background: #1e5e82; }
+    .loc-8-head { background: #1e8e4e; }
+    .loc-9-head { background: #b87010; }
+
+    /* ── Charts ── */
+    .chart-section {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 1px 1px rgba(0,0,0,0.03), 0 4px 20px rgba(0,0,0,0.06);
+      padding: 20px 22px;
+      margin-bottom: 14px;
+    }
+    .chart-section h3 {
+      font-size: 0.66rem;
+      font-weight: 700;
+      color: #8e8e93;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 16px;
+    }
+    canvas { width: 100% !important; }
+    .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 14px; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 600; color: #1c1c1e; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+
+    /* ── Weekend modal ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.3);
+      backdrop-filter: blur(8px) saturate(180%);
+      -webkit-backdrop-filter: blur(8px) saturate(180%);
+      z-index: 500;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: rgba(255,255,255,0.98);
+      border-radius: 20px;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.18), 0 0 0 0.5px rgba(0,0,0,0.06);
+      padding: 28px 30px 24px;
+      max-width: 500px;
+      width: 92%;
+      position: relative;
+      animation: popIn 0.24s cubic-bezier(0.34,1.5,0.64,1);
+    }
+    @keyframes popIn {
+      from { transform: scale(0.86) translateY(8px); opacity: 0; }
+      to   { transform: scale(1) translateY(0);      opacity: 1; }
+    }
+    .modal-close {
+      position: absolute;
+      top: 14px; right: 14px;
+      width: 28px; height: 28px;
+      background: #f2f2f7;
+      border: none;
+      border-radius: 50%;
+      font-size: 0.7rem;
+      cursor: pointer;
+      color: #636366;
+      display: flex; align-items: center; justify-content: center;
+      font-family: inherit;
+      transition: background 0.12s, color 0.12s;
+    }
+    .modal-close:hover { background: #e5e5ea; color: #1c1c1e; }
+    .modal-winner { text-align: center; margin-bottom: 20px; }
+    .modal-winner .trophy { font-size: 2.4rem; line-height: 1; display: block; }
+    .modal-winner h2 {
+      font-size: 1.45rem;
+      font-weight: 700;
+      color: #1c1c1e;
+      margin: 7px 0 3px;
+      letter-spacing: -0.5px;
+    }
+    .modal-winner .weekend-dates { font-size: 0.8rem; color: #8e8e93; }
+    .modal-winner .verdict {
+      margin-top: 10px;
+      font-size: 0.875rem;
+      color: #3a3a3c;
+      line-height: 1.55;
+    }
+    .modal-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.845rem;
+      margin-top: 16px;
+    }
+    .modal-table th {
+      padding: 6px 10px 7px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      text-align: center;
+      color: #fff;
+      white-space: nowrap;
+    }
+    .modal-table th:first-child {
+      background: none;
+      color: #aeaeb2;
+      font-size: 0.66rem;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      text-align: left;
+    }
+    .modal-table td {
+      padding: 9px 10px;
+      text-align: center;
+      border-bottom: 0.5px solid #f2f2f7;
+    }
+    .modal-table tr:last-child td { border-bottom: none; }
+    .modal-table td:first-child {
+      text-align: left;
+      font-size: 0.79rem;
+      font-weight: 600;
+      color: #8e8e93;
+    }
+    .modal-table .winner-col { font-weight: 700; color: #1c1c1e; }
+    .score-bar-wrap { display: flex; align-items: center; gap: 6px; justify-content: center; }
+    .score-bar {
+      height: 5px;
+      border-radius: 3px;
+      background: #f2f2f7;
+      flex: 1;
+      max-width: 56px;
+      overflow: hidden;
+    }
+    .score-bar-fill { height: 100%; border-radius: 3px; }
+    .modal-weights {
+      margin-top: 14px;
+      font-size: 0.7rem;
+      color: #aeaeb2;
+      text-align: center;
+      letter-spacing: 0.1px;
+    }
+
+    /* ── Weekend city cards ── */
+    .city-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      margin-top: 14px;
+      max-height: min(420px, 55vh);
+      overflow-y: auto;
+      /* subtle scrollbar */
+      scrollbar-width: thin;
+      scrollbar-color: #d1d1d6 transparent;
+    }
+    .city-cards::-webkit-scrollbar { width: 4px; }
+    .city-cards::-webkit-scrollbar-thumb { background: #d1d1d6; border-radius: 2px; }
+    .city-card {
+      border-radius: 12px;
+      padding: 11px 13px;
+      background: #f9f9f9;
+      border: 1.5px solid transparent;
+      transition: background 0.12s;
+    }
+    .city-card.winner {
+      background: #fff;
+      border-color: rgba(0,0,0,0.08);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .city-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      gap: 8px;
+    }
+    .city-card-name {
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: #1c1c1e;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .city-card-rank {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #fff;
+      padding: 2px 7px;
+      border-radius: 100px;
+      flex-shrink: 0;
+    }
+    .city-card-score {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #8e8e93;
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+    }
+    .city-card-bar {
+      height: 4px;
+      border-radius: 2px;
+      background: #e5e5ea;
+      margin-bottom: 10px;
+      overflow: hidden;
+    }
+    .city-card-bar-fill { height: 100%; border-radius: 2px; }
+    .city-card-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+    .city-card-stat { display: flex; flex-direction: column; gap: 2px; }
+    .city-stat-label {
+      font-size: 0.6rem;
+      font-weight: 600;
+      color: #aeaeb2;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .city-stat-val {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #1c1c1e;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 680px) {
+      /* Header */
+      header { padding: 0 16px; }
+      header .logo { font-size: 0.95rem; }
+
+      /* Location bar: stack slots above action bar */
+      .location-bar {
+        flex-direction: column;
+        padding: 10px 14px 14px;
+        gap: 10px;
+        align-items: stretch;
+      }
+
+      /* Slots: horizontal scroll row */
+      #slots-container {
+        display: flex !important;
+        overflow-x: auto;
+        gap: 8px;
+        width: 100%;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        padding-bottom: 2px;
+      }
+      #slots-container::-webkit-scrollbar { display: none; }
+
+      .loc-slot {
+        min-width: 160px;
+        max-width: 190px;
+        flex-shrink: 0;
+      }
+
+      /* Action bar: full width, wrap if needed */
+      .action-bar {
+        width: 100%;
+        align-self: stretch;
+        gap: 8px;
+      }
+
+      /* Buttons: bigger touch targets, equal width */
+      .compare-btn, .weekend-btn {
+        flex: 1;
+        height: 42px;
+        font-size: 0.875rem;
+        border-radius: 12px;
+        padding: 0 12px;
+      }
+
+      /* View toggles: stretch to fill */
+      .view-toggle { flex: 1; }
+      .view-btn { flex: 1; text-align: center; padding: 6px 8px; }
+
+      /* Main area */
+      .main { padding: 12px; }
+
+      /* Table: tighter padding + smaller text */
+      table { font-size: 0.82rem; }
+      thead tr.header-row-1 th { padding: 10px 8px 5px; font-size: 0.82rem; }
+      thead tr.header-row-2 th { padding: 3px 8px 8px; font-size: 0.62rem; }
+      tbody tr.day-separator td { padding: 5px 12px; }
+      td { padding: 7px 8px; }
+      td.col-time { padding-left: 12px; min-width: 48px; font-size: 0.8rem; }
+      td.col-symbol { min-width: 28px; font-size: 1rem; }
+      td.col-temp { min-width: 44px; font-size: 0.8rem; }
+      td.col-precip { min-width: 42px; font-size: 0.76rem; }
+      td.col-wind { min-width: 54px; font-size: 0.76rem; }
+
+      /* Charts */
+      .chart-section { padding: 16px 14px; }
+
+      /* Modal */
+      .modal { padding: 20px 16px 18px; border-radius: 16px; }
+      .modal-winner h2 { font-size: 1.2rem; }
+      .modal-winner .trophy { font-size: 2rem; }
+
+      /* City cards: 2-column stats on mobile */
+      .city-card-stats { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 420px) {
+      header .logo { font-size: 0.88rem; }
+      .lang-btn { padding: 4px 7px; font-size: 0.72rem; }
+      .loc-slot { min-width: 140px; }
+      .compare-btn, .weekend-btn { font-size: 0.82rem; height: 40px; }
+      .view-btn { font-size: 0.72rem; padding: 5px 6px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo" id="header-logo">yr<span>.no</span> Sammenlign</div>
+  <div class="lang-toggle">
+    <button class="lang-btn active" id="lang-no">🇳🇴 NO</button>
+    <button class="lang-btn" id="lang-en">EN 🇬🇧</button>
+  </div>
+</header>
+
+<div class="location-bar">
+  <div id="slots-container" style="display:contents;"></div>
+
+  <div class="action-bar">
+    <button class="compare-btn" id="compare-btn" disabled>Sammenlign ▶</button>
+    <button class="weekend-btn" id="weekend-btn" disabled title="Anbefal beste by for helgen">🌞 Helg?</button>
+
+    <div class="view-toggle">
+      <button class="view-btn active" id="range-2d">2 dager</button>
+      <button class="view-btn" id="range-7d">7 dager</button>
+    </div>
+
+    <div class="view-toggle">
+      <button class="view-btn active" id="view-table">⊞ Tabell</button>
+      <button class="view-btn" id="view-chart">∿ Graf</button>
+    </div>
+  </div>
+</div>
+
+<!-- Weekend suggestion modal -->
+<div class="modal-overlay" id="weekend-modal">
+  <div class="modal">
+    <button class="modal-close" id="modal-close">✕</button>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<div class="main" id="main-content">
+  <div class="status-bar" id="status-bar">
+    <div class="big-icon">🌤️</div>
+    <div id="status-text">Søk etter minst to steder ovenfor, og klikk <strong>Sammenlign</strong></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+// ── Translations ───────────────────────────────────────────────────────────
+const LANG = {
+  no: {
+    locale: 'nb-NO',
+    headerLogo: 'yr<span>.no</span> Sammenlign',
+    headerSub: 'Sammenlign værmeldinger side om side for opptil 3 steder',
+    locationLabel: 'Sted',
+    placeholder: 'Søk etter sted…',
+    clearTitle: 'Fjern',
+    compareBtn: 'Sammenlign ▶',
+    weekendBtn: '🌞 Helg?',
+    weekendTitle: 'Anbefal beste by for helgen',
+    range2d: '2 dager', range7d: '7 dager',
+    viewTable: '⊞ Tabell', viewChart: '∿ Graf',
+    statusInit: 'Søk etter minst to steder ovenfor, og klikk <strong>Sammenlign</strong>',
+    statusLoading: 'Henter værdata…',
+    statusLoadingBtn: '⏳ Laster…',
+    noData: 'Ingen data tilgjengelig.',
+    colTime: 'Tid', colSky: '🌤 Vær', colTemp: '🌡 Temp',
+    colPrecip: '💧 Nedbør', colWind: '💨 Vind',
+    chartTemp: 'Temperatur (°C)', chartPrecip: 'Nedbør (mm/t)',
+    rowTemp: '🌡 Snitttemp', rowRain: '💧 Total nedbør',
+    rowWind: '💨 Snittvind', rowForecast: '🌤 Vær', rowScore: '⭐ Poeng',
+    cardTemp: 'Temp', cardRain: 'Nedbør', cardWind: 'Vind', cardSky: 'Vær',
+    weights: 'Vektfordeling: Temperatur 60% · Nedbør 30% · Vind 10% · Kun dagtid (07–21)',
+    noWeekendData: 'Ingen helgedata tilgjengelig ennå — værmeldingen rekker kanskje ikke så langt frem.',
+    confidence: { clear: 'klar favoritt', slight: 'liten fordel', narrow: 'knepen vinner' },
+    verdictIs: 'er',
+    verdictWarm: (t) => `varme temperaturer i snitt ${t}°C`,
+    verdictMild: (t) => `milde temperaturer rundt ${t}°C`,
+    verdictWarmest: (t) => `det varmeste alternativet med ${t}°C`,
+    verdictNoRain: 'ingen nedbør forventet',
+    verdictLittleRain: (mm) => `kun ${mm} mm nedbør forventet`,
+    verdictFewRainyHours: (h) => `nedbør konsentrert til bare ${h} time${h === 1 ? '' : 'r'}`,
+    cardRainLabel: 'Regntimer',
+    cardRainVal: (h, mm) => h === 0 ? 'Tørt 🌤' : `${h}t · ${mm}mm`,
+    searchLoading: 'Søker…',
+    searchEmpty: 'Ingen steder funnet',
+    searchFailed: 'Søk mislyktes — sjekk tilkoblingen',
+  },
+  en: {
+    locale: 'en-GB',
+    headerLogo: 'yr<span>.no</span> Compare',
+    headerSub: 'Side-by-side weather comparison for up to 3 places',
+    locationLabel: 'Location',
+    placeholder: 'Search place…',
+    clearTitle: 'Clear',
+    compareBtn: 'Compare ▶',
+    weekendBtn: '🌞 Weekend?',
+    weekendTitle: 'Suggest the best city for the upcoming weekend',
+    range2d: '2 days', range7d: '7 days',
+    viewTable: '⊞ Table', viewChart: '∿ Chart',
+    statusInit: 'Search for at least two places above, then click <strong>Compare</strong>',
+    statusLoading: 'Fetching weather data…',
+    statusLoadingBtn: '⏳ Loading…',
+    noData: 'No data available.',
+    colTime: 'Time', colSky: '🌤 Sky', colTemp: '🌡 Temp',
+    colPrecip: '💧 Precip', colWind: '💨 Wind',
+    chartTemp: 'Temperature (°C)', chartPrecip: 'Precipitation (mm/h)',
+    rowTemp: '🌡 Avg temp', rowRain: '💧 Total rain',
+    rowWind: '💨 Avg wind', rowForecast: '🌤 Forecast', rowScore: '⭐ Score',
+    cardTemp: 'Temp', cardRain: 'Rain', cardWind: 'Wind', cardSky: 'Sky',
+    weights: 'Score weights: Temperature 60% · Precipitation 30% · Wind 10% · Daytime hours (07–21) only',
+    noWeekendData: 'No weekend data available yet — the forecast may not reach that far.',
+    confidence: { clear: 'clear favourite', slight: 'slight edge', narrow: 'narrow winner' },
+    verdictIs: 'is the',
+    verdictWarm: (t) => `warm temperatures averaging ${t}°C`,
+    verdictMild: (t) => `mild temperatures around ${t}°C`,
+    verdictWarmest: (t) => `the warmest option at ${t}°C`,
+    verdictNoRain: 'no rain expected',
+    verdictLittleRain: (mm) => `only ${mm} mm of rain expected`,
+    verdictFewRainyHours: (h) => `rain concentrated into just ${h} hour${h === 1 ? '' : 's'}`,
+    cardRainLabel: 'Rain hours',
+    cardRainVal: (h, mm) => h === 0 ? 'Dry 🌤' : `${h}h · ${mm}mm`,
+    searchLoading: 'Searching…',
+    searchEmpty: 'No places found',
+    searchFailed: 'Search failed — check connection',
+  }
+};
+
+function t() { return LANG[state.lang]; }
+
+function applyLang() {
+  const l = t();
+  document.documentElement.lang = state.lang === 'no' ? 'no' : 'en';
+  document.getElementById('header-logo').innerHTML = l.headerLogo;
+  renderLocationBar();
+  document.getElementById('compare-btn').textContent = l.compareBtn;
+  document.getElementById('weekend-btn').textContent = l.weekendBtn;
+  document.getElementById('weekend-btn').title = l.weekendTitle;
+  document.getElementById('range-2d').textContent = l.range2d;
+  document.getElementById('range-7d').textContent = l.range7d;
+  document.getElementById('view-table').textContent = l.viewTable;
+  document.getElementById('view-chart').textContent = l.viewChart;
+  document.getElementById('lang-no').classList.toggle('active', state.lang === 'no');
+  document.getElementById('lang-en').classList.toggle('active', state.lang === 'en');
+  // Re-render if data is loaded; otherwise update placeholder status
+  if (activeIdxs().length >= 2 && state.weatherData.some(d => d)) {
+    render();
+  } else {
+    const sb = document.getElementById('status-text');
+    if (sb) sb.innerHTML = l.statusInit;
+  }
+}
+
+// ── State ──────────────────────────────────────────────────────────────────
+const state = {
+  locations: [null],   // grows dynamically, one trailing null = "add next" slot
+  weatherData: [],
+  view: 'table',
+  range: '2d',
+  hours: 48,
+  interval: 1,
+  lang: 'no',
+};
+
+const LOC_COLORS = [
+  '#1a6e9e', '#2a7a4b', '#7b4aa0', '#c0392b', '#d35400',
+  '#16a085', '#8e44ad', '#2c6b8a', '#27ae60', '#e67e22',
+];
+
+// ── Location slots (dynamic) ───────────────────────────────────────────────
+const debounceTimers = {};
+
+function renderLocationBar() {
+  const container = document.getElementById('slots-container');
+  container.innerHTML = '';
+  const l = t();
+
+  state.locations.forEach((loc, idx) => {
+    const color = LOC_COLORS[idx % LOC_COLORS.length];
+    const div = document.createElement('div');
+    div.className = 'loc-slot';
+    div.id = `slot-${idx}`;
+    div.innerHTML = `
+      <label>
+        <span class="color-dot" style="background:${color};"></span>
+        ${l.locationLabel} ${idx + 1}
+      </label>
+      <div class="loc-input-wrap">
+        <input type="text" placeholder="${l.placeholder}" autocomplete="off"
+               id="input-${idx}" value="${loc ? loc.name.replace(/"/g,'&quot;') : ''}" />
+        <button class="clear-btn ${loc ? 'visible' : ''}" id="clear-${idx}" title="${l.clearTitle}">✕</button>
+      </div>
+      <div class="dropdown" id="dropdown-${idx}" style="display:none;"></div>`;
+    container.appendChild(div);
+
+    const input    = div.querySelector('input');
+    const clearBtn = div.querySelector('.clear-btn');
+    const dropdown = div.querySelector('.dropdown');
+
+    input.addEventListener('input', () => {
+      const q = input.value.trim();
+      clearBtn.classList.toggle('visible', q.length > 0);
+      if (q.length < 2) { dropdown.style.display = 'none'; return; }
+      clearTimeout(debounceTimers[idx]);
+      debounceTimers[idx] = setTimeout(() => searchPlace(idx, q), 320);
+    });
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Escape') dropdown.style.display = 'none';
+    });
+    clearBtn.addEventListener('click', () => removeSlot(idx));
+  });
+}
+
+// Single document listener to close dropdowns on outside click
+document.addEventListener('click', e => {
+  state.locations.forEach((_, i) => {
+    const slot = document.getElementById(`slot-${i}`);
+    const dd   = document.getElementById(`dropdown-${i}`);
+    if (slot && dd && !slot.contains(e.target)) dd.style.display = 'none';
+  });
+});
+
+async function searchPlace(idx, query) {
+  const dropdown = document.getElementById(`dropdown-${idx}`);
+  dropdown.innerHTML = `<div class="dropdown-loading"><span class="loading-spinner"></span> ${t().searchLoading}</div>`;
+  dropdown.style.display = 'block';
+
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=6&addressdetails=1`;
+    const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+    const data = await res.json();
+
+    if (!data.length) {
+      dropdown.innerHTML = `<div class="dropdown-empty">${t().searchEmpty}</div>`;
+      return;
+    }
+
+    dropdown.innerHTML = '';
+    data.forEach(item => {
+      const name = item.display_name.split(',')[0];
+      const detail = item.display_name.split(',').slice(1, 3).join(',').trim();
+      const div = document.createElement('div');
+      div.className = 'dropdown-item';
+      div.innerHTML = `<div class="place-name">${name}</div><div class="place-detail">${detail}</div>`;
+      div.addEventListener('click', () => selectLocation(idx, {
+        name, display: item.display_name,
+        lat: parseFloat(item.lat), lon: parseFloat(item.lon)
+      }));
+      dropdown.appendChild(div);
+    });
+  } catch(e) {
+    dropdown.innerHTML = `<div class="dropdown-empty">${t().searchFailed}</div>`;
+  }
+}
+
+function selectLocation(idx, loc) {
+  state.locations[idx] = loc;
+  document.getElementById(`dropdown-${idx}`).style.display = 'none';
+  // If this was the last slot and we're under the 10-city limit, append a new empty slot
+  if (idx === state.locations.length - 1 && state.locations.length < 10) {
+    state.locations.push(null);
+    renderLocationBar();
+    setTimeout(() => document.getElementById(`input-${state.locations.length - 1}`)?.focus(), 50);
+  } else {
+    // Just refresh the input value of this slot
+    const input = document.getElementById(`input-${idx}`);
+    if (input) { input.value = loc.name; }
+    document.getElementById(`clear-${idx}`)?.classList.add('visible');
+  }
+  updateCompareBtn();
+}
+
+function removeSlot(idx) {
+  state.locations.splice(idx, 1);
+  if (state.weatherData.length > idx) state.weatherData.splice(idx, 1);
+  // Always keep at least one slot
+  if (state.locations.length === 0) state.locations.push(null);
+  // Ensure exactly one trailing empty slot when under the limit
+  const filledCount = state.locations.filter(l => l !== null).length;
+  const lastIsEmpty = state.locations[state.locations.length - 1] === null;
+  if (!lastIsEmpty && filledCount < 10) state.locations.push(null);
+  // Remove duplicate trailing empty slots
+  while (state.locations.length > 1 &&
+         state.locations[state.locations.length - 1] === null &&
+         state.locations[state.locations.length - 2] === null) {
+    state.locations.pop();
+  }
+  renderLocationBar();
+  updateCompareBtn();
+}
+
+function updateCompareBtn() {
+  const filled = state.locations.filter(l => l !== null).length;
+  document.getElementById('compare-btn').disabled = filled < 2;
+}
+
+// ── Weather fetch (api.met.no) ────────────────────────────────────────────
+async function fetchWeather(idx) {
+  const loc = state.locations[idx];
+  if (!loc) return null;
+  const url = `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${loc.lat.toFixed(4)}&lon=${loc.lon.toFixed(4)}`;
+  const res = await fetch(url, {
+    headers: { 'User-Agent': 'vaerkamp.no contact@vaerkamp.no' }
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${loc.name}`);
+  return res.json();
+}
+
+async function loadAndRender() {
+  const btn = document.getElementById('compare-btn');
+  btn.disabled = true;
+  btn.textContent = t().statusLoadingBtn;
+
+  setStatus(`<span class="loading-spinner"></span> ${t().statusLoading}`);
+
+  try {
+    const promises = state.locations.map((loc, i) => loc ? fetchWeather(i) : Promise.resolve(null));
+    const results = await Promise.all(promises);
+    state.weatherData = results; // same length as state.locations
+    render();
+    document.getElementById('weekend-btn').disabled = false;
+  } catch(e) {
+    setStatus(`⚠️ Error: ${e.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = t().compareBtn;
+    const filled = state.locations.filter(l => l !== null).length;
+    if (filled < 2) btn.disabled = true;
+  }
+}
+
+// ── Rendering ─────────────────────────────────────────────────────────────
+function setStatus(html) {
+  document.getElementById('main-content').innerHTML = `<div class="status-bar">${html}</div>`;
+}
+
+function render() {
+  if (state.view === 'table') renderTable();
+  else renderChart();
+}
+
+// Collect active location indices (filled slots that also have weather data)
+function activeIdxs() {
+  return state.locations
+    .map((loc, i) => (loc && state.weatherData[i]) ? i : -1)
+    .filter(i => i >= 0);
+}
+
+// Build a merged timeline of timestamps (next N hours, filtered by interval)
+function buildTimeline() {
+  const idxs = activeIdxs();
+  if (!idxs.length) return [];
+
+  // Use the first location as the reference timeline
+  const series = state.weatherData[idxs[0]].properties.timeseries;
+  const now = new Date();
+  const cutoff = new Date(now.getTime() + state.hours * 3600 * 1000);
+
+  return series
+    .filter(t => {
+      const d = new Date(t.time);
+      if (d < now || d > cutoff) return false;
+      // For 7-day view keep only UTC 0h, 6h, 12h, 18h slots
+      // (met.no uses UTC timestamps; local getHours() breaks the filter in non-UTC timezones)
+      if (state.interval > 1) return d.getUTCHours() % state.interval === 0;
+      return true;
+    })
+    .map(t => t.time);
+}
+
+function getEntry(weatherData, isoTime) {
+  if (!weatherData) return null;
+  return weatherData.properties.timeseries.find(t => t.time === isoTime) || null;
+}
+
+function tempClass(t) {
+  if (t >= 30) return 'temp-hot';
+  if (t >= 20) return 'temp-warm';
+  if (t >= 10) return 'temp-mild';
+  if (t >= 0)  return 'temp-cool';
+  if (t >= -10) return 'temp-cold';
+  return 'temp-freeze';
+}
+
+function windDir(deg) {
+  const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+  return dirs[Math.round(deg / 45) % 8];
+}
+
+function windArrow(deg) {
+  // Unicode arrows: ↑ ↗ → ↘ ↓ ↙ ← ↖
+  const arrows = ['↓','↙','←','↖','↑','↗','→','↘']; // wind comes FROM deg, arrow points where wind goes
+  return arrows[Math.round(deg / 45) % 8];
+}
+
+function symbolEmoji(code) {
+  if (!code) return '';
+  const c = code.toLowerCase();
+  if (c.includes('thunder'))          return '⛈️';
+  if (c.includes('clearsky') || c.includes('clear_sky')) {
+    return c.includes('night') ? '🌙' : '☀️';
+  }
+  if (c.includes('fair'))             return c.includes('night') ? '🌙' : '🌤️';
+  if (c.includes('partlycloudy') || c.includes('partly_cloudy')) return '⛅';
+  if (c.includes('cloudy'))           return '☁️';
+  if (c.includes('fog'))              return '🌫️';
+  if (c.includes('heavyrain'))        return '🌧️';
+  if (c.includes('lightrainshower') || c.includes('rainshower')) return '🌦️';
+  if (c.includes('rain'))             return '🌧️';
+  if (c.includes('heavysleet'))       return '🌨️';
+  if (c.includes('sleet'))            return '🌨️';
+  if (c.includes('heavysnow'))        return '❄️';
+  if (c.includes('snow'))             return '🌨️';
+  return '🌡️';
+}
+
+function formatTime(isoTime) {
+  const d = new Date(isoTime);
+  return d.toLocaleTimeString('no-NO', {hour: '2-digit', minute: '2-digit'});
+}
+
+function formatDay(isoTime) {
+  const d = new Date(isoTime);
+  return d.toLocaleDateString(t().locale, {weekday: 'long', day: 'numeric', month: 'long'});
+}
+
+function isNightHour(isoTime) {
+  const h = new Date(isoTime).getHours();
+  return h < 6 || h >= 22;
+}
+
+function renderTable() {
+  const idxs = activeIdxs();
+  const timeline = buildTimeline();
+  if (!timeline.length) { setStatus(t().noData); return; }
+
+  let lastDay = '';
+
+  let html = `<div class="table-wrap"><table>
+    <thead>
+      <tr class="header-row-1">
+        <th style="text-align:left; padding-left:16px; min-width:60px; background:white;">${t().colTime}</th>`;
+
+  idxs.forEach((i, pos) => {
+    const loc = state.locations[i];
+    html += `<th colspan="4" class="loc-${i}-head ${pos === 0 ? '' : 'loc-divider'}" style="border-left:2px solid rgba(255,255,255,0.3);">
+      ${loc.name}
+    </th>`;
+  });
+
+  html += `</tr>
+      <tr class="header-row-2">
+        <th class="col-time"></th>`;
+
+  idxs.forEach((i, pos) => {
+    const borderStyle = pos > 0 ? 'border-left:2px solid rgba(255,255,255,0.4);' : '';
+    html += `
+        <th class="loc-${i}-head" style="${borderStyle}">${t().colSky}</th>
+        <th class="loc-${i}-head">${t().colTemp}</th>
+        <th class="loc-${i}-head">${t().colPrecip}</th>
+        <th class="loc-${i}-head">${t().colWind}</th>`;
+  });
+
+  html += `</tr></thead><tbody>`;
+
+  timeline.forEach(t => {
+    const day = new Date(t).toDateString();
+    if (day !== lastDay) {
+      lastDay = day;
+      html += `<tr class="day-separator"><td colspan="${idxs.length * 4 + 1}">${formatDay(t)}</td></tr>`;
+    }
+
+    const nightClass = isNightHour(t) ? ' night-row' : '';
+    html += `<tr class="${nightClass}"><td class="col-time">${formatTime(t)}</td>`;
+
+    idxs.forEach((i, pos) => {
+      const entry = getEntry(state.weatherData[i], t);
+      const borderStyle = pos > 0 ? 'border-left:2px solid var(--border);' : '';
+
+      if (!entry) {
+        html += `<td colspan="4" class="no-data" style="${borderStyle}">—</td>`;
+        return;
+      }
+
+      const instant = entry.data.instant.details;
+      const next1   = entry.data.next_1_hours;
+      const next6   = entry.data.next_6_hours;
+      const fc      = next1 || next6;
+
+      const temp    = instant.air_temperature;
+      const wind    = instant.wind_speed;
+      const windDeg = instant.wind_from_direction;
+      const symbol  = fc?.summary?.symbol_code || '';
+      const precip  = fc?.details?.precipitation_amount;
+
+      const tClass  = tempClass(temp);
+      const emoji   = symbolEmoji(symbol);
+      const precipStr = precip != null ? (precip > 0 ? `${precip.toFixed(1)} mm` : '0') : '—';
+      const windStr = `${windArrow(windDeg)} ${wind.toFixed(1)} m/s`;
+
+      html += `
+        <td class="col-symbol" style="${borderStyle}">${emoji}</td>
+        <td class="col-temp ${tClass}">${temp > 0 ? '+' : ''}${temp.toFixed(1)}°</td>
+        <td class="col-precip">${precipStr}</td>
+        <td class="col-wind">${windStr}</td>`;
+    });
+
+    html += `</tr>`;
+  });
+
+  html += `</tbody></table></div>`;
+
+  document.getElementById('main-content').innerHTML = html;
+}
+
+// ── Chart view ────────────────────────────────────────────────────────────
+let chartInstance = null;
+
+function renderChart() {
+  const idxs = activeIdxs();
+  const timeline = buildTimeline();
+  if (!timeline.length) { setStatus(t().noData); return; }
+
+  // 2-day mode: sample every 3 entries (= every 3h). 7-day mode already 6h — keep all.
+  const sampleEvery = state.range === '7d' ? 1 : 3;
+  const sampled = timeline.filter((_, i) => i % sampleEvery === 0);
+
+  const labels = sampled.map(ts => {
+    const d = new Date(ts);
+    return d.toLocaleString(t().locale, {weekday:'short', hour:'2-digit', minute:'2-digit'});
+  });
+
+  const tempDatasets = idxs.map(i => {
+    const loc = state.locations[i];
+    const temps = sampled.map(t => {
+      const entry = getEntry(state.weatherData[i], t);
+      return entry ? entry.data.instant.details.air_temperature : null;
+    });
+    return {
+      label: loc.name,
+      data: temps,
+      borderColor: LOC_COLORS[i],
+      backgroundColor: LOC_COLORS[i] + '22',
+      tension: 0.4,
+      fill: false,
+      pointRadius: 3,
+      yAxisID: 'yTemp',
+    };
+  });
+
+  const precipDatasets = idxs.map(i => {
+    const loc = state.locations[i];
+    const precips = sampled.map(t => {
+      const entry = getEntry(state.weatherData[i], t);
+      const fc = entry?.data?.next_1_hours || entry?.data?.next_6_hours;
+      return fc?.details?.precipitation_amount ?? 0;
+    });
+    return {
+      label: loc.name + ' (precip)',
+      data: precips,
+      backgroundColor: LOC_COLORS[i] + '55',
+      borderColor: LOC_COLORS[i],
+      borderWidth: 1,
+      type: 'bar',
+      yAxisID: 'yPrecip',
+    };
+  });
+
+  const legendHtml = idxs.map(i => {
+    const loc = state.locations[i];
+    return `<div class="legend-item"><div class="legend-dot" style="background:${LOC_COLORS[i]};"></div>${loc.name}</div>`;
+  }).join('');
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="chart-section">
+      <h3>${t().chartTemp}</h3>
+      <canvas id="chart-temp"></canvas>
+      <div class="legend">${legendHtml}</div>
+    </div>
+    <div class="chart-section">
+      <h3>${t().chartPrecip}</h3>
+      <canvas id="chart-precip"></canvas>
+    </div>`;
+
+  // Temperature chart
+  new Chart(document.getElementById('chart-temp'), {
+    type: 'line',
+    data: { labels, datasets: tempDatasets.map(d => ({...d, yAxisID: undefined})) },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false } },
+      scales: {
+        y: {
+          title: { display: true, text: '°C' },
+          grid: { color: '#eef3f8' }
+        },
+        x: {
+          ticks: { maxTicksLimit: 12, font: {size: 11} },
+          grid: { color: '#eef3f8' }
+        }
+      }
+    }
+  });
+
+  // Precipitation chart
+  new Chart(document.getElementById('chart-precip'), {
+    type: 'bar',
+    data: { labels, datasets: precipDatasets.map(d => ({...d, type: undefined})) },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false } },
+      scales: {
+        y: {
+          title: { display: true, text: 'mm' },
+          min: 0,
+          grid: { color: '#eef3f8' }
+        },
+        x: {
+          ticks: { maxTicksLimit: 12, font: {size: 11} },
+          grid: { color: '#eef3f8' }
+        }
+      }
+    }
+  });
+}
+
+// ── Weekend Suggestion ────────────────────────────────────────────────────
+function getUpcomingWeekend() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const day = today.getDay(); // 0=Sun, 1=Mon, …, 5=Fri, 6=Sat
+
+  const fri = new Date(today);
+  if (day === 5) {
+    // today IS Friday
+  } else if (day === 6) {
+    // today is Saturday — weekend started yesterday
+    fri.setDate(today.getDate() - 1);
+  } else if (day === 0) {
+    // today is Sunday — weekend started two days ago
+    fri.setDate(today.getDate() - 2);
+  } else {
+    // Mon–Thu: jump forward to next Friday
+    fri.setDate(today.getDate() + (5 - day));
+  }
+  const sat = new Date(fri); sat.setDate(fri.getDate() + 1);
+  const sun = new Date(fri); sun.setDate(fri.getDate() + 2);
+  return { fri, sat, sun };
+}
+
+function getWeekendStats(weatherData, fri, sat, sun) {
+  const timeseries = weatherData.properties.timeseries;
+  const friStr = fri.toDateString();
+  const satStr = sat.toDateString();
+  const sunStr = sun.toDateString();
+
+  const entries = timeseries.filter(t => {
+    const d = new Date(t.time);
+    const ds = d.toDateString();
+    const h  = d.getHours();
+    return (ds === friStr || ds === satStr || ds === sunStr) && h >= 7 && h < 21;
+  });
+  if (!entries.length) return null;
+
+  const temps   = entries.map(e => e.data.instant.details.air_temperature);
+  const winds   = entries.map(e => e.data.instant.details.wind_speed);
+  const precips = entries.map(e => {
+    const fc = e.data.next_1_hours || e.data.next_6_hours;
+    return fc?.details?.precipitation_amount ?? 0;
+  });
+
+  const avgTemp     = temps.reduce((a,b) => a+b, 0) / temps.length;
+  const avgWind     = winds.reduce((a,b) => a+b, 0) / winds.length;
+  const totalPrecip = precips.reduce((a,b) => a+b, 0);
+  // Rainy hours: slots where measurable precipitation is expected (≥ 0.3 mm/h)
+  const RAIN_THRESHOLD = 0.3;
+  const rainyHours  = precips.filter(p => p >= RAIN_THRESHOLD).length;
+
+  // Pick a representative symbol (most common during daytime)
+  const symbols = entries.map(e => {
+    const fc = e.data.next_1_hours || e.data.next_6_hours;
+    return fc?.summary?.symbol_code || '';
+  }).filter(Boolean);
+  const symbolFreq = {};
+  symbols.forEach(s => { symbolFreq[s] = (symbolFreq[s]||0) + 1; });
+  const topSymbol = Object.entries(symbolFreq).sort((a,b) => b[1]-a[1])[0]?.[0] || '';
+
+  return { avgTemp, avgWind, totalPrecip, rainyHours, totalHours: precips.length, topSymbol };
+}
+
+function scoreCity(stats) {
+  // Temperature: -10°C → 0pts, 25°C → 100pts (warmer is better)
+  const tempScore = Math.max(0, Math.min(100, (stats.avgTemp + 10) / 35 * 100));
+
+  // Precipitation: scored on *spread*, not total amount.
+  // A city with 2 rainy hours out of 14 beats one with 8 light-drizzle hours,
+  // even if the former has more mm. Small extra penalty for very high totals.
+  const dryRatio    = stats.totalHours > 0
+    ? (stats.totalHours - stats.rainyHours) / stats.totalHours
+    : 1;
+  const amountBonus = Math.min(10, stats.totalPrecip * 0.25); // max 10pt penalty for heavy totals
+  const precipScore = Math.max(0, Math.min(100, dryRatio * 100 - amountBonus));
+
+  // Wind: 0 m/s → 100pts, 20 m/s → 0pts
+  const windScore = Math.max(0, Math.min(100, 100 - stats.avgWind * 5));
+
+  // Weights: temperature 60%, rain 30%, wind 10%
+  const total = 0.60 * tempScore + 0.30 * precipScore + 0.10 * windScore;
+  return { total: Math.round(total), tempScore: Math.round(tempScore), precipScore: Math.round(precipScore), windScore: Math.round(windScore) };
+}
+
+function buildVerdict(winner, scores, stats) {
+  const l = t();
+  const name = winner.name;
+  const s = stats[winner.idx];
+  const reasons = [];
+  const others = scores.filter(x => x.idx !== winner.idx);
+
+  if (s.avgTemp > 15) reasons.push(l.verdictWarm(s.avgTemp.toFixed(1)));
+  else if (s.avgTemp > 5) reasons.push(l.verdictMild(s.avgTemp.toFixed(1)));
+  else reasons.push(l.verdictWarmest(s.avgTemp.toFixed(1)));
+
+  if (s.rainyHours === 0) reasons.push(l.verdictNoRain);
+  else if (s.rainyHours <= 3) reasons.push(l.verdictFewRainyHours(s.rainyHours));
+
+  const secondPlace = others.sort((a,b) => b.score.total - a.score.total)[0];
+  const margin = winner.score.total - secondPlace.score.total;
+  const confidence = margin >= 20 ? l.confidence.clear : margin >= 8 ? l.confidence.slight : l.confidence.narrow;
+
+  return `<strong>${name}</strong> ${l.verdictIs} ${confidence} — ${reasons.join(', ')}.`;
+}
+
+function showWeekendSuggestion() {
+  const idxs = activeIdxs();
+  const { fri, sat, sun } = getUpcomingWeekend();
+
+  const dateLabel = fri.toLocaleDateString(t().locale, { weekday:'long', day:'numeric', month:'long' })
+    + ' – ' + sun.toLocaleDateString(t().locale, { weekday:'long', day:'numeric', month:'long' });
+
+  const results = idxs.map(i => {
+    const stats = getWeekendStats(state.weatherData[i], fri, sat, sun);
+    if (!stats) return null;
+    const score = scoreCity(stats);
+    return { idx: i, name: state.locations[i].name, stats, score };
+  }).filter(Boolean);
+
+  if (!results.length) {
+    document.getElementById('modal-body').innerHTML =
+      `<div style="text-align:center;padding:20px 0;color:var(--muted)">
+        ${t().noWeekendData}<br>
+        <small>${dateLabel}</small>
+       </div>`;
+    document.getElementById('weekend-modal').classList.add('open');
+    return;
+  }
+
+  results.sort((a, b) => b.score.total - a.score.total);
+  const winner = results[0];
+
+  const verdict = buildVerdict(winner, results, results.reduce((acc,r) => { acc[r.idx]=r.stats; return acc; }, {}));
+
+  const cards = results.map((r, pos) => {
+    const l       = t();
+    const color   = LOC_COLORS[r.idx];
+    const isWinner = pos === 0;
+    const pct     = r.score.total;
+    const temp    = `${r.stats.avgTemp > 0 ? '+' : ''}${r.stats.avgTemp.toFixed(1)}°C`;
+    const rain    = l.cardRainVal(r.stats.rainyHours, r.stats.totalPrecip.toFixed(1));
+    const wind    = `${r.stats.avgWind.toFixed(1)} m/s`;
+    const wx      = symbolEmoji(r.stats.topSymbol);
+    const rankLabel = isWinner ? '🏆' : `#${pos + 1}`;
+    return `
+      <div class="city-card${isWinner ? ' winner' : ''}">
+        <div class="city-card-header">
+          <span class="city-card-name">
+            <span class="color-dot" style="background:${color};width:9px;height:9px;"></span>
+            ${r.name}
+          </span>
+          <span class="city-card-rank" style="background:${color};">${rankLabel}</span>
+          <span class="city-card-score">${pct}/100</span>
+        </div>
+        <div class="city-card-bar">
+          <div class="city-card-bar-fill" style="width:${pct}%;background:${color};"></div>
+        </div>
+        <div class="city-card-stats">
+          <div class="city-card-stat">
+            <span class="city-stat-label">${l.cardTemp}</span>
+            <span class="city-stat-val">${temp}</span>
+          </div>
+          <div class="city-card-stat">
+            <span class="city-stat-label">${l.cardRainLabel}</span>
+            <span class="city-stat-val">${rain}</span>
+          </div>
+          <div class="city-card-stat">
+            <span class="city-stat-label">${l.cardWind}</span>
+            <span class="city-stat-val">${wind}</span>
+          </div>
+          <div class="city-card-stat">
+            <span class="city-stat-label">${l.cardSky}</span>
+            <span class="city-stat-val">${wx}</span>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('modal-body').innerHTML = `
+    <div class="modal-winner">
+      <span class="trophy">🌞</span>
+      <h2>${winner.name}</h2>
+      <div class="weekend-dates">${dateLabel}</div>
+      <div class="verdict">${verdict}</div>
+    </div>
+    <div class="city-cards">${cards}</div>
+    <div class="modal-weights">${t().weights}</div>`;
+
+  document.getElementById('weekend-modal').classList.add('open');
+}
+
+// ── Wiring ─────────────────────────────────────────────────────────────────
+document.getElementById('lang-no').addEventListener('click', () => { state.lang = 'no'; applyLang(); });
+document.getElementById('lang-en').addEventListener('click', () => { state.lang = 'en'; applyLang(); });
+
+document.getElementById('compare-btn').addEventListener('click', loadAndRender);
+document.getElementById('weekend-btn').addEventListener('click', showWeekendSuggestion);
+document.getElementById('modal-close').addEventListener('click', () => {
+  document.getElementById('weekend-modal').classList.remove('open');
+});
+document.getElementById('weekend-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('weekend-modal'))
+    document.getElementById('weekend-modal').classList.remove('open');
+});
+
+document.getElementById('range-2d').addEventListener('click', () => {
+  state.range = '2d'; state.hours = 48; state.interval = 1;
+  document.getElementById('range-2d').classList.add('active');
+  document.getElementById('range-7d').classList.remove('active');
+  if (activeIdxs().length >= 2 && state.weatherData.some(d => d)) render();
+});
+
+document.getElementById('range-7d').addEventListener('click', () => {
+  state.range = '7d'; state.hours = 168; state.interval = 6;
+  document.getElementById('range-7d').classList.add('active');
+  document.getElementById('range-2d').classList.remove('active');
+  if (activeIdxs().length >= 2 && state.weatherData.some(d => d)) render();
+});
+
+document.getElementById('view-table').addEventListener('click', () => {
+  state.view = 'table';
+  document.getElementById('view-table').classList.add('active');
+  document.getElementById('view-chart').classList.remove('active');
+  if (activeIdxs().length >= 2 && state.weatherData.some(d => d)) render();
+});
+
+document.getElementById('view-chart').addEventListener('click', () => {
+  state.view = 'chart';
+  document.getElementById('view-chart').classList.add('active');
+  document.getElementById('view-table').classList.remove('active');
+  if (activeIdxs().length >= 2 && state.weatherData.some(d => d)) render();
+});
+
+// Initialise language (Norwegian default)
+applyLang();
+</script>
+</body>
+</html>
